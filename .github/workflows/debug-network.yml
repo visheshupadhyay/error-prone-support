@@ -14,30 +14,66 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
+      # Step 1: Apply the network security policy
       - name: Harden Runner
         uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
         with:
           egress-policy: block
           allowed-endpoints: |
             github.com:443
+            objects.githubusercontent.com:443
+            release-assets.githubusercontent.com:443
+            repo.maven.apache.org:443
 
-      - name: Checkout repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      # Step 2: Reproduce Picnic's checkout and Maven setup
+      - name: Checkout and setup Maven
+        uses: s4u/setup-maven-action@4a02cbd99769e46198135c31d5097c94618ba3f5
+        with:
+          checkout-fetch-depth: 2
+          java-version: 25.0.4
+          java-distribution: temurin
+          maven-version: 3.9.16
 
-      - name: Test GitHub connectivity
+      # Step 3: Verify the installed tools
+      - name: Verify Java and Maven
         shell: bash
         run: |
-          echo "=== DNS resolution ==="
-          getent hosts github.com
+          echo "=== Java ==="
+          java -version
 
-          echo "=== HTTPS connectivity ==="
-          curl --fail --silent --show-error \
-            --connect-timeout 10 \
-            --retry 2 \
-            --output /dev/null \
-            https://github.com
+          echo "=== Maven ==="
+          mvn -version
 
-          echo "=== Git connectivity ==="
+      # Step 4: Verify GitHub connectivity
+      - name: Verify Git connectivity
+        shell: bash
+        run: |
           git ls-remote \
             https://github.com/PicnicSupermarket/error-prone-support.git \
             HEAD
+
+      # Step 5: Collect diagnostics even if setup fails
+      - name: Network diagnostics after setup
+        if: always()
+        shell: bash
+        run: |
+          echo "=== DNS resolution ==="
+          getent hosts github.com || true
+
+          echo "=== HTTPS connectivity ==="
+          curl --verbose \
+            --connect-timeout 10 \
+            --max-time 30 \
+            https://github.com \
+            --output /dev/null || true
+
+          echo "=== Git connectivity ==="
+          timeout 30s git ls-remote \
+            https://github.com/PicnicSupermarket/error-prone-support.git \
+            HEAD || true
+
+          echo "=== Java version ==="
+          java -version || true
+
+          echo "=== Maven version ==="
+          mvn -version || true
