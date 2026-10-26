@@ -1,0 +1,43 @@
+name: Debug CI Network
+
+on:
+  push:
+    branches:
+      - investigation/ci-network
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  debug:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Harden Runner
+        uses: step-security/harden-runner@9af89fc71515a100421586dfdb3dc9c984fbf411
+        with:
+          egress-policy: block
+          allowed-endpoints: |
+            github.com:443
+
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+
+      - name: Test GitHub connectivity
+        shell: bash
+        run: |
+          echo "=== DNS resolution ==="
+          getent hosts github.com
+
+          echo "=== HTTPS connectivity ==="
+          curl --fail --silent --show-error \
+            --connect-timeout 10 \
+            --retry 2 \
+            --output /dev/null \
+            https://github.com
+
+          echo "=== Git connectivity ==="
+          git ls-remote \
+            https://github.com/PicnicSupermarket/error-prone-support.git \
+            HEAD
